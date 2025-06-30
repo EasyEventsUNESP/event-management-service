@@ -14,17 +14,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/event")
-@RequiredArgsConstructor
 public class EventController {
 
     @Autowired
-    private final EventService eventService;
-
-    @GetMapping
-    public String endpointTest() {
-
-        return "ERALDO VS MARIO!";
-    }
+    private EventService eventService;
 
     @GetMapping("/listar")
     public ResponseEntity<List<EventoModel>> listar() {
