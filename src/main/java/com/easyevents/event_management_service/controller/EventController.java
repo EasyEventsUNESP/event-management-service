@@ -25,7 +25,6 @@ public class EventController {
         return eventService.listar();
     }
 
-
     @GetMapping("/buscarPorEmail/{email}")
     public ResponseEntity<List<EventoModel>> buscarEventosPorEmail(@PathVariable String email) {
         List<EventoModel> eventos = eventService.buscarEventosPorEmail(email);
