@@ -29,6 +29,4 @@ public class EventoModel {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Orcamento orcamento;
-    private List<String> funcionariosId;
-    private List<String> convidadosId;
 }

@@ -19,6 +19,4 @@ public class CriarEventoRequest {
     private String localizacao;
     private String emailOrganizador;
     private String orcamentoId;
-    private List<String> funcionariosId;
-    private List<String> convidadosId;
 }

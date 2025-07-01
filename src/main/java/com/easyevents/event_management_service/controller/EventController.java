@@ -26,9 +26,13 @@ public class EventController {
     }
 
 
-    @GetMapping("/buscar/{email}")
-    public ResponseEntity<EventoModel> buscarPorEmail(@PathVariable String email) {
-        return eventService.buscarPorEmail(email);
+    @GetMapping("/buscarPorEmail/{email}")
+    public ResponseEntity<List<EventoModel>> buscarEventosPorEmail(@PathVariable String email) {
+        List<EventoModel> eventos = eventService.buscarEventosPorEmail(email);
+        if (eventos.isEmpty()) {
+            return ResponseEntity.noContent().build(); // Return 204 No Content if no events are found
+        }
+        return ResponseEntity.ok(eventos); // Return 200 OK with the list of events
     }
 
     @PostMapping("/criar")
@@ -37,12 +41,15 @@ public class EventController {
     }
 
     @PutMapping("/atualizar")
-    public ResponseEntity<EventoResponse> atualizar(@RequestBody AtualizarEventoRequest atualizarUsuarioRequest) {
-        return eventService.atualizarEvento(atualizarUsuarioRequest);
+    public ResponseEntity<EventoResponse> atualizar(@RequestBody AtualizarEventoRequest atualizarEventoRequest) {
+        return eventService.atualizarEvento(atualizarEventoRequest);
     }
 
-    @DeleteMapping("/deletar/{email}")
-    public ResponseEntity<EventoResponse> deletar(@PathVariable String email) {
-        return eventService.deletarEvento(email);
+    @DeleteMapping("/deletar/{eventoId}/{email}")
+    public ResponseEntity<EventoResponse> deletarEvento(
+            @PathVariable String eventoId,
+            @PathVariable String email) {
+
+        return eventService.deletarEvento(eventoId, email);
     }
 }

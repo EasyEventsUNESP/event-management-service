@@ -13,7 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class EventService {
@@ -32,15 +34,17 @@ public class EventService {
     }
 
     /**
-     * Método para buscar um evento pelo email do organizador.
+     * Método para buscar todos os eventos pelo email do organizador.
      *
-     * @param email Email do organizador para buscar o evento.
-     * @throws IllegalArgumentException Se o evento não for encontrado.
-     * @return ResponseEntity contendo os detalhes do evento.
+     * @param email Email do organizador para buscar os eventos.
+     * @return List de eventos.
      */
-    public ResponseEntity<EventoModel> buscarPorEmail(String email) {
-        return ResponseEntity.status(HttpStatus.FOUND).body(eventoRepository.findByEmailOrganizador(email)
-                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado")));
+    public List<EventoModel> buscarEventosPorEmail(String email) {
+        List<EventoModel> eventos = eventoRepository.findByEmailOrganizador(email);
+        if (eventos.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return eventos;
     }
 
     /**
@@ -55,8 +59,9 @@ public class EventService {
             throw new IllegalArgumentException("A data de início deve ser anterior à data de fim.");
         }
 
-        if (eventoRepository.findByEmailOrganizador(criarEventoRequest.getNome()).isPresent()) {
-            throw new IllegalArgumentException("Você já criou um evento com esse mesmo nome! Escolha outro.");
+
+        if (eventoRepository.findByNomeAndEmailOrganizador(criarEventoRequest.getNome(), criarEventoRequest.getEmailOrganizador()).isPresent()) {
+            throw new IllegalArgumentException("Você já criou um evento com esse mesmo nome para este organizador! Escolha outro nome para o evento.");
         }
 
         EventoModel novoEvento = EventoModel.builder()
@@ -68,11 +73,9 @@ public class EventService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .emailOrganizador(criarEventoRequest.getEmailOrganizador())
-                .funcionariosId(criarEventoRequest.getFuncionariosId())
-                .convidadosId(criarEventoRequest.getConvidadosId())
                 .build();
 
-        eventoRepository.insert(novoEvento);
+        eventoRepository.save(novoEvento); // Use .save() for both insert and update operations in JpaRepository
 
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 EventoResponse.builder()
@@ -83,19 +86,24 @@ public class EventService {
         );
     }
 
-    /**
-     * Método para atualizar um evento existente.
-     *
-     * @param atualizarEventoRequest Objeto de requisição contendo os detalhes atualizados do evento.
-     * @throws IllegalArgumentException Se o evento não for encontrado ou se a data de início for posterior à data de fim.
-     * @return ResponseEntity contendo a resposta do serviço.
-     */
     public ResponseEntity<EventoResponse> atualizarEvento(AtualizarEventoRequest atualizarEventoRequest) {
-        EventoModel eventoModel = eventoRepository.findByEmailOrganizador(atualizarEventoRequest.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Evento não encontrado com o e-mail: " + atualizarEventoRequest.getEmail()));
+        // 1. Encontrar o evento específico a ser atualizado.
+        // Usamos 'novoNome' da requisição como o nome do evento a ser encontrado,
+        // e 'email' como o e-mail do organizador.
+        Optional<EventoModel> eventoOptional = eventoRepository.findByNomeAndEmailOrganizador(
+                atualizarEventoRequest.getNovoNome(), // Nome do evento a ser atualizado
+                atualizarEventoRequest.getEmail()     // E-mail do organizador do evento
+        );
+
+        // Se o evento não for encontrado, lança uma exceção
+        EventoModel eventoModel = eventoOptional.orElseThrow(() ->
+                new IllegalArgumentException("Evento não encontrado com o nome '" + atualizarEventoRequest.getNovoNome() +
+                        "' e e-mail do organizador: " + atualizarEventoRequest.getEmail()));
 
         boolean modificado = false;
 
+        // 2. Atualizar a descrição, se fornecida e diferente
+        // Apenas atualiza se o campo não for nulo e não estiver vazio (após trim)
         if (atualizarEventoRequest.getDescricao() != null && !atualizarEventoRequest.getDescricao().trim().isEmpty()) {
             if (!atualizarEventoRequest.getDescricao().equals(eventoModel.getDescricao())) {
                 eventoModel.setDescricao(atualizarEventoRequest.getDescricao().trim());
@@ -103,19 +111,27 @@ public class EventService {
             }
         }
 
+        // 3. Atualizar datas de início e fim, se fornecidas e válidas
+        // Ambos os campos (dataInicio e dataFim) devem estar presentes para que a atualização ocorra
         if (atualizarEventoRequest.getDataInicio() != null && atualizarEventoRequest.getDataFim() != null) {
-            LocalDateTime dataInicio = LocalDateTime.parse(atualizarEventoRequest.getDataInicio());
-            LocalDateTime dataFim = LocalDateTime.parse(atualizarEventoRequest.getDataFim());
+            LocalDateTime dataInicioRequest = LocalDateTime.parse(atualizarEventoRequest.getDataInicio());
+            LocalDateTime dataFimRequest = LocalDateTime.parse(atualizarEventoRequest.getDataFim());
 
-            if (dataInicio.isAfter(dataFim)) {
+            // Valida se a data de início é anterior à data de fim
+            if (dataInicioRequest.isAfter(dataFimRequest)) {
                 throw new IllegalArgumentException("A data de início deve ser anterior à data de fim.");
             }
 
-            eventoModel.setDataInicio(dataInicio);
-            eventoModel.setDataFim(dataFim);
-            modificado = true;
+            // Verifica se as datas realmente mudaram antes de setar
+            if (!dataInicioRequest.equals(eventoModel.getDataInicio()) || !dataFimRequest.equals(eventoModel.getDataFim())) {
+                eventoModel.setDataInicio(dataInicioRequest);
+                eventoModel.setDataFim(dataFimRequest);
+                modificado = true;
+            }
         }
 
+        // 4. Atualizar a localização, se fornecida e diferente
+        // Apenas atualiza se o campo não for nulo e não estiver vazio (após trim)
         if (atualizarEventoRequest.getLocalizacao() != null && !atualizarEventoRequest.getLocalizacao().trim().isEmpty()) {
             if (!atualizarEventoRequest.getLocalizacao().equals(eventoModel.getLocal())) {
                 eventoModel.setLocal(atualizarEventoRequest.getLocalizacao().trim());
@@ -123,11 +139,15 @@ public class EventService {
             }
         }
 
+
+
+        // 5. Se alguma modificação foi feita, atualiza a data de atualização e salva no repositório
         if (modificado) {
             eventoModel.setUpdatedAt(LocalDateTime.now());
-            eventoRepository.save(eventoModel);
+            eventoRepository.save(eventoModel); // Usa .save() para persistir as alterações
         }
 
+        // 6. Retorna a resposta de sucesso
         return ResponseEntity.status(HttpStatus.OK)
                 .body(EventoResponse.builder()
                         .emailOrganizador(eventoModel.getEmailOrganizador())
@@ -138,24 +158,26 @@ public class EventService {
     }
 
     /**
-     * Método para deletar um evento com base no email do organizador.
+     * Método para deletar um evento específico com base no ID do evento (MongoDB ID) e no email do organizador.
      *
-     * @param email Email do organizador do evento a ser deletado.
-     * @throws IllegalArgumentException Se o evento não for encontrado.
+     * @param eventoId O ID único do evento (String, MongoDB ID) a ser deletado.
+     * @param emailOrganizador O email do organizador do evento.
+     * @throws IllegalArgumentException Se o evento não for encontrado ou se o organizador não tiver permissão.
      * @return ResponseEntity contendo a resposta do serviço.
      */
+    public ResponseEntity<EventoResponse> deletarEvento(String eventoId, String emailOrganizador) {
 
-    public ResponseEntity<EventoResponse> deletarEvento(String email) {
+        EventoModel eventoParaDeletar = eventoRepository.findByIdAndEmailOrganizador(eventoId, emailOrganizador)
+                .orElseThrow(() -> new IllegalArgumentException("Evento não encontrado ou você não tem permissão para deletá-lo."));
 
-        EventoModel eventoModel = eventoRepository.findByEmailOrganizador(email)
-                .orElseThrow(() -> new IllegalArgumentException("Evento não encontrado"));
+        // Deleta o evento encontrado
+        eventoRepository.delete(eventoParaDeletar);
 
-        eventoRepository.delete(eventoModel);
-
+        // Retorna uma resposta de sucesso
         return ResponseEntity.status(HttpStatus.OK).body(
                 EventoResponse.builder()
-                        .nomeEvento(eventoModel.getNome())
-                        .emailOrganizador(eventoModel.getEmailOrganizador())
+                        .nomeEvento(eventoParaDeletar.getNome())
+                        .emailOrganizador(eventoParaDeletar.getEmailOrganizador())
                         .responseMessage("Evento deletado com sucesso.")
                         .build()
         );
