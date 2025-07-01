@@ -28,5 +28,5 @@ public class EventoModel {
     private LocalDateTime dataFim;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private Orcamento orcamento;
+    private String orcamentoId;
 }
